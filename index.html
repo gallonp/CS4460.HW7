@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+body {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.x.axis path {
+  display: none;
+}
+
+.line {
+  fill: none;
+  stroke: steelblue;
+  stroke-width: 2.0px;
+}
+.center {
+    margin-left: auto;
+    margin-right: auto;
+    width: 70%;
+}
+</style>
+<body>
+  <div id="svg"></div>
+  <div class='center'>
+    <button id='btn-1'>Year By Year</button>
+    <button id='btn-2'>Play</button>
+    <button id='btn-3'>Pause</button>
+    <button id='btn-4'>All</button>
+  </div>
+<script src="http://code.jquery.com/jquery-2.1.0.min.js"></script>
+
+<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+<script>
+var r = 240;
+var g = 220;
+var b = 40;
+
+
+var margin = {top: 20, right: 400, bottom: 30, left: 90},
+    width = 1200 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var parseDate = d3.time.format("%Y%m%d").parse;
+
+var x = d3.scale.ordinal().rangePoints([0, width]);;
+
+var y = d3.scale.linear()
+    .range([height, 0]);
+
+
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom");
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left");
+
+var line = d3.svg.line()
+    .interpolate("basis")
+    .x(function(d) { return x(d.age); })
+    .y(function(d) { return y(d.people); });
+
+var svg = d3.select("#svg").append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+  .append("g")
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+
+d3.csv("population.csv",function(d){
+  return{
+    year: +d.year,
+    age: +d.age,
+    sex: +d.sex,
+    people: +d.people,
+  };
+}, function(error, rows){
+    showtext();
+ 
+    // A var to store all the different ages to be used in x-axis 
+    var ages = d3.set();
+    
+    //extract all different years to be used to draw different lines
+    var year_key = d3.set(rows.map(function(d){
+          return d.year;
+    }));
+
+    var colors = [];
+    for (year in year_key.values()){
+      // console.log(year)
+        colors[colors.length] = d3.rgb(r,g,b).toString();
+        g=g-15;
+    }
+    // console.log(year_key);
+    var color = d3.scale.ordinal().range(colors);
+    // console.log(color.range());
+    color.domain(year_key.values());
+   
+
+    //For each each in the domain, extract all the age demographics
+    var years1 = color.domain().map(function(year) {
+
+      // console.log(year);
+      return {
+        year: year,
+        values:  rows.filter(function(d){
+            // console.log(year);
+            return d.year == year && d.sex==1;
+          }).map(function(d) {
+
+          // I will set people=-d.people for sex==1 
+          //so that we can see both male and female's demographics
+          ages.add(d.age);
+          return {age: d.age, 
+                  people: d.people};
+
+          })
+        };
+      });
+    var years0 = color.domain().map(function(year) {
+
+      // console.log(year);
+      return {
+        year: year,
+        values:  rows.filter(function(d){
+            // console.log(year);
+            return d.year == year && d.sex==2;
+          }).map(function(d) {
+            return {
+              age: d.age, 
+              people: -d.people};
+            }
+            )
+        };
+      });
+    // yearsC = years1.concat(years0);
+    // console.log(yearsC);
+    //set the domain of x-axis. if you give a domain value to x, it will return its locaiton on screen.
+    x.domain(ages.values());
+    // console.log(x(10));
+
+    y.domain([
+      d3.min(years0, function(c) { return d3.min(c.values, function(v) { return v.people; }); }),
+      d3.max(years1, function(c) { return d3.max(c.values, function(v) { return v.people; }); })
+    ]);
+
+    var years = years1.concat(years0);
+    svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height/2 + ")")
+      .call(xAxis);
+
+
+    yAxis.tickFormat(function(d) { return Math.abs(d)});
+
+    svg.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+    .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y",6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Male ");
+
+  svg.append("g")
+    .append("text")
+     
+      .attr("transform", "rotate(-90)")
+      .attr("y",10)
+       .attr("x",-460)
+      //.style("text-anchor", "end")
+      .text("Female ");
+
+  svg.append("g")
+        .append("text")
+        .attr("y",235)
+        .attr("x",730)
+        .text("Age");
+
+  svg.append("g")
+        .append("text")
+        .attr("y",25)
+        .attr("x",400)
+        .style("font-size","15pt")
+        .text("The Change in population by Year, Age and Sex");
+
+
+
+    var year = svg.selectAll(".year")
+      .data(years)
+    .enter().append("g")
+      .attr("class", "year");
+
+    year.append("path")
+      .attr("class", "line")
+      .style("stroke", function(d) { 
+        // console.log(color(d.year))
+        return color(d.year); })
+      .style("opacity","0")
+      .transition()
+        .duration(250)
+        .delay(function(d,i){
+          return (i%(years.length/2))*250
+        })
+        .attr("d", function(d) { return line(d.values); })        
+        .style("opacity","0.5");
+
+  var i =0;
+  var autoPlay=false;
+  $('#btn-1').click(function(){
+        
+        var yr = years.slice(i,i+1).concat(years.slice(i+(years.length/2),i+(years.length/2)+1));
+        // console.log(yr);
+        update(yr);
+        i=(i+1);
+        if (i>=years.length/2) i=0;
+      });
+
+  var autoPlay = false;
+  setInterval(function(){
+      if(autoPlay){
+          console.log(i);
+          var yr = years.slice(i,i+1).concat(years.slice(i+(years.length/2),i+(years.length/2)+1));
+          // console.log(yr);
+          update(yr);
+          i=(i+1);
+          if (i>=years.length/2) i=0;
+      }
+    },1000);
+
+  $('#btn-2').click(function(){
+    autoPlay=true;;
+
+    });
+
+  $('#btn-3').click(function(){
+      autoPlay=false;
+  });
+
+  $('#btn-4').click(function(){
+      autoPlay=false;
+      var year = svg.selectAll(".year").data(years)
+      .enter()
+      .append("g")
+      .attr("class", "year");
+
+      year.append("path")
+      .attr("class", "line")
+      .style("stroke", function(d) { return color(d.year); })
+      .style("opacity","0")
+      .transition()
+        .duration(150)
+        .delay(function(d,i){
+          return (i%(years.length/2))*150
+        })
+        .attr("d", function(d) { return line(d.values); })        
+        .style("opacity","0.5");
+
+
+       d3.selectAll("path")
+        .on("mouseover",function(d, i){
+          d3.select(this)
+        //  console.log(d3.mouse(this));
+
+          textlabel(d,d3.mouse(this)[0],d3.mouse(this)[1]);
+          var temp = svg.selectAll("path").filter(function(r,i){
+            return r.year == d.year;
+              
+          });
+
+          temp
+            .style("stroke","blue")
+            .style("opacity","0.5")
+            .style("stroke-width",3)
+      })
+      .on("mouseout",function(d){
+        d3.select(this)
+        var temp = svg.selectAll("path").filter(function(r,i){
+        return r.year == d.year;
+        });
+       
+        temp
+        .style("stroke", function(d) { return color(d.year); })
+        .style("stroke-width",2)
+         .style("opacity","0.5")
+        textlabelout();
+      })
+  });
+
+  function update(data){
+    var yy = svg.selectAll(".year").data(data);
+
+              yy.select("path")
+              .transition()
+              .duration(250)
+              .style("stroke", function(d) { return color(d.year); })
+              .attr("d", function(d) {return line(d.values); })        
+              .style("opacity","0.5");
+
+        yy.exit()
+              .transition()
+              .duration(500)
+              .style("opacity","0")
+              .remove();            
+
+  }
+
+  d3.selectAll("path")
+    .on("mouseover",function(d, i){
+      d3.select(this)
+    //  console.log(d3.mouse(this));
+
+      textlabel(d,d3.mouse(this)[0],d3.mouse(this)[1]);
+      var temp = svg.selectAll("path").filter(function(r,i){
+        return r.year == d.year;
+          
+      });
+
+      temp
+        .style("stroke","blue")
+        .style("opacity","0.5")
+        .style("stroke-width",3)
+  })
+  .on("mouseout",function(d){
+    d3.select(this)
+    var temp = svg.selectAll("path").filter(function(r,i){
+    return r.year == d.year;
+    });
+   
+    temp
+    .style("stroke", function(d) { return color(d.year); })
+    .style("stroke-width",2)
+     .style("opacity","0.5")
+    textlabelout();
+  })
+
+function textlabel(d,mx,my){
+  svg.append("g")
+        .append("text")
+        .attr("class","info")
+        .attr("y",my-20)
+        .attr("x",mx+5)
+        .style("font-size","12px")
+         .style("zIndex","2")
+        .text("Year: "+d.year);
+  svg.append("g")
+        .append("text")
+        .attr("class","info")
+        .attr("y",my-5)
+        .attr("x",mx+5)
+         .style("font-size","12px")
+         .style("zIndex","2")
+        .text("People: "+Math.round(Math.abs(y.invert(my))));
+       
+  }
+
+function textlabelout(){
+  svg.selectAll("g").select(".info").remove();
+  }
+
+});
+
+function showtext(){
+  for(var i =0;i<16;i++){
+    var temp = i*10+1850;
+    svg.append("g")
+          .append("text")
+          .attr("y",i*20+60)
+          .attr("x",850)
+          .attr("fill",d3.rgb(240,220-i*15,40))
+          .text("Year: "+temp);
+  }
+}
+
+
+</script>
